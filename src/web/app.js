@@ -127,19 +127,25 @@ function scheduleProcess() {
  * Stops when connected or when the user taps Connect manually.
  */
 async function tryAutoConnect() {
-  if (!navigator.bluetooth?.getDevices) return;
+  if (!navigator.bluetooth?.getDevices) {
+    console.log('Auto-connect: getDevices() not supported');
+    return;
+  }
 
   let devices;
   try {
     devices = await navigator.bluetooth.getDevices();
   } catch (e) {
+    console.log('Auto-connect: getDevices() error:', e.message);
     return;
   }
+
+  console.log('Auto-connect: getDevices() returned', devices.length, 'device(s):', devices.map(d => d.name || '(unnamed)'));
+
   if (devices.length === 0) return;
 
-  // Filter to named devices
-  const named = devices.filter(d => d.name);
-  if (named.length === 0) return;
+  // Use all devices — name may not be populated until advertisement is seen
+  const targets = devices;
 
   setStatus('Waiting for printer...', 'info');
   state.autoConnecting = true;
@@ -147,27 +153,29 @@ async function tryAutoConnect() {
   // Listen for advertisements on all known devices simultaneously.
   // When any device is seen, try connecting to it.
   const abort = new AbortController();
+  let watching = 0;
 
-  for (const device of named) {
+  for (const device of targets) {
     if (!device.watchAdvertisements) continue;
 
-    device.addEventListener('advertisementreceived', async () => {
+    device.addEventListener('advertisementreceived', async (event) => {
       // Only act once
       if (!state.autoConnecting || state.connected) return;
       state.autoConnecting = false;
       abort.abort();
 
+      const name = event.device.name || device.name || 'printer';
       try {
-        setStatus('Reconnecting to ' + device.name + '...', 'info');
+        setStatus('Reconnecting to ' + name + '...', 'info');
         state.ble.device = device;
         state.ble.onDisconnect = handleDisconnect;
         await state.ble.connectGATT();
 
         state.connected = true;
-        state.deviceName = device.name;
+        state.deviceName = state.ble.getDeviceName();
         onConnected();
       } catch (e) {
-        console.log('Auto-connect failed for', device.name + ':', e.message);
+        console.log('Auto-connect failed for', name + ':', e.message);
         state.ble.device = null;
         setStatus('', '');
         updateConnectionUI();
@@ -175,6 +183,13 @@ async function tryAutoConnect() {
     }, { once: true });
 
     device.watchAdvertisements({ signal: abort.signal }).catch(() => {});
+    watching++;
+  }
+
+  console.log('Auto-connect: watching', watching, 'device(s) for advertisements');
+  if (watching === 0) {
+    setStatus('', '');
+    return;
   }
 
   // Store abort so manual connect can cancel the background scan

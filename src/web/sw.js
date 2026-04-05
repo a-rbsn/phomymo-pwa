@@ -3,7 +3,7 @@
  * Handles: share target image receiving, offline caching
  */
 
-const CACHE_NAME = 'phomemo-print-v14';
+const CACHE_NAME = 'phomemo-print-v15';
 const ASSETS = [
   './',
   './index.html',
