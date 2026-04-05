@@ -1,0 +1,4 @@
+[build]
+  publish = "src/web"
+
+# No build command needed — vanilla static files
