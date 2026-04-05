@@ -217,7 +217,7 @@ async function checkShareTarget() {
         const { title, text } = await response.json();
         await cache.delete('shared-text');
         if (title || text) {
-          const img = renderTextToImage(title, text);
+          const img = await renderTextToImage(title, text);
           state.sourceImage = img;
           processImage();
           setStatus('Shared text loaded', 'success');
@@ -336,12 +336,13 @@ function renderTextToImage(title, text) {
     }
   }
 
-  // Convert canvas to image element (synchronous since canvas is already rendered)
-  const img = new Image();
-  img.src = canvas.toDataURL();
-  img.width = canvas.width;
-  img.height = canvas.height;
-  return img;
+  // Convert canvas to image — must wait for load before returning
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to render text'));
+    img.src = canvas.toDataURL();
+  });
 }
 
 // =============================================================================
