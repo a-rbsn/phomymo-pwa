@@ -58,6 +58,9 @@ async function init() {
   if (!BLETransport.isAvailable()) {
     setStatus('Web Bluetooth not available in this browser', 'error');
     $('connect-btn').disabled = true;
+  } else {
+    // Try auto-reconnecting to a previously paired printer
+    await tryAutoConnect();
   }
 }
 
@@ -115,33 +118,112 @@ function scheduleProcess() {
 // BLUETOOTH CONNECTION
 // =============================================================================
 
+/**
+ * Try to auto-reconnect to a previously paired printer.
+ * Uses navigator.bluetooth.getDevices() + watchAdvertisements() to find
+ * a known device that's in range, then connects without showing the picker.
+ */
+async function tryAutoConnect() {
+  if (!navigator.bluetooth?.getDevices) return;
+
+  try {
+    const devices = await navigator.bluetooth.getDevices();
+    if (devices.length === 0) return;
+
+    setStatus('Looking for printer...', 'info');
+    $('connect-btn').disabled = true;
+
+    for (const device of devices) {
+      if (!device.name) continue;
+
+      try {
+        // Check if device is in range via advertisements (3s timeout)
+        const inRange = await waitForAdvertisement(device, 3000);
+        if (!inRange) continue;
+
+        // Device is nearby — try connecting
+        setStatus('Reconnecting to ' + device.name + '...', 'info');
+        state.ble.device = device;
+        state.ble.onDisconnect = handleDisconnect;
+        await state.ble.connectGATT();
+
+        // Success
+        state.connected = true;
+        state.deviceName = device.name;
+        onConnected();
+        return;
+      } catch (e) {
+        console.log('Auto-connect failed for', device.name + ':', e.message);
+      }
+    }
+  } catch (e) {
+    console.log('Auto-connect error:', e.message);
+  }
+
+  // Clean up on failure
+  state.ble.device = null;
+  $('connect-btn').disabled = false;
+  setStatus('', '');
+}
+
+/** Wait for a BLE advertisement to confirm device is in range */
+function waitForAdvertisement(device, timeout) {
+  if (!device.watchAdvertisements) {
+    // watchAdvertisements not supported — skip rather than blind-connect
+    return Promise.resolve(false);
+  }
+
+  return new Promise((resolve) => {
+    const abort = new AbortController();
+    let done = false;
+
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      abort.abort();
+      resolve(result);
+    };
+
+    setTimeout(() => finish(false), timeout);
+
+    device.addEventListener('advertisementreceived', () => finish(true), { once: true });
+    device.watchAdvertisements({ signal: abort.signal }).catch(() => finish(false));
+  });
+}
+
+function handleDisconnect() {
+  state.connected = false;
+  state.deviceName = '';
+  updateConnectionUI();
+  setStatus('Printer disconnected', 'warning');
+}
+
+/** Shared post-connection setup */
+function onConnected() {
+  updateConnectionUI();
+  const desc = getPrinterDescription(state.deviceName);
+  const widthPx = getPrinterWidthBytes(state.deviceName) * 8;
+  setStatus('Connected', 'success');
+  $('printer-name').textContent = `${desc} (${widthPx}px wide)`;
+
+  // Query printer info (non-blocking)
+  state.ble.queryAll().catch(() => {});
+
+  // Re-process image at correct printer width if one is loaded
+  if (state.sourceImage) processImage();
+}
+
 async function connect() {
   try {
     setStatus('Connecting...', 'info');
     $('connect-btn').disabled = true;
 
-    state.ble.onDisconnect = () => {
-      state.connected = false;
-      state.deviceName = '';
-      updateConnectionUI();
-      setStatus('Printer disconnected', 'warning');
-    };
+    state.ble.onDisconnect = handleDisconnect;
 
     await state.ble.connect();
     state.connected = true;
     state.deviceName = state.ble.getDeviceName();
-    updateConnectionUI();
-
-    const desc = getPrinterDescription(state.deviceName);
-    const widthPx = getPrinterWidthBytes(state.deviceName) * 8;
-    setStatus('Connected', 'success');
-    $('printer-name').textContent = `${desc} (${widthPx}px wide)`;
-
-    // Query printer info (battery, paper, etc.)
-    try { await state.ble.queryAll(); } catch (_) { /* non-critical */ }
-
-    // Re-process image at correct printer width if one is loaded
-    if (state.sourceImage) processImage();
+    onConnected();
 
   } catch (e) {
     state.connected = false;
