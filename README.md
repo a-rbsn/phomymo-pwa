@@ -52,6 +52,17 @@ Auto-detection matches the Bluetooth device name to the correct configuration. P
 
 Web Bluetooth is not available in Firefox, Safari, or Brave.
 
+### Auto-reconnect
+
+The app automatically reconnects to your printer when you open it — no need to tap Connect every time. This requires a Chrome flag:
+
+1. Open Chrome and go to `chrome://flags`
+2. Search for **"Web Bluetooth new permissions backend"**
+3. Set it to **Enabled**
+4. Relaunch Chrome
+
+Without this flag the app still works, but you'll need to tap Connect and select the printer each time.
+
 ## Run Locally
 
 ```bash

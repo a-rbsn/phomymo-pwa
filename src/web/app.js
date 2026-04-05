@@ -127,21 +127,14 @@ function scheduleProcess() {
  * Stops when connected or when the user taps Connect manually.
  */
 async function tryAutoConnect() {
-  if (!navigator.bluetooth?.getDevices) {
-    setStatus('getDevices() not supported', 'warning');
-    return;
-  }
+  if (!navigator.bluetooth?.getDevices) return;
 
   let devices;
   try {
     devices = await navigator.bluetooth.getDevices();
   } catch (e) {
-    setStatus('getDevices() error: ' + e.message, 'warning');
     return;
   }
-
-  const names = devices.map(d => d.name || '(unnamed)').join(', ');
-  setStatus('Saved devices: ' + (devices.length ? names : 'none'), 'info');
 
   if (devices.length === 0) return;
 
