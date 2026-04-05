@@ -267,7 +267,7 @@ function renderTextToImage(title, text) {
     ? getPrinterWidthBytes(state.deviceName)
     : DEFAULT_WIDTH_BYTES;
   const widthPx = widthBytes * 8;
-  const padding = Math.round(widthPx * 0.06);
+  const padding = Math.round(widthPx * 0.03);
   const contentWidth = widthPx - padding * 2;
 
   // Set up a measuring canvas
@@ -459,7 +459,7 @@ async function printImage() {
 
     // Append blank rows so the print clears the tear edge
     // (some printers ignore ESC J feed, but blank raster rows always work)
-    const feedRows = 200;
+    const feedRows = 80;
     const paddedData = new Uint8Array(rasterData.length + rasterWidthBytes * feedRows);
     paddedData.set(rasterData);
     // Rest is already zeroes (white)
