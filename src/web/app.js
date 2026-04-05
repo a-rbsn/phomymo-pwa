@@ -28,6 +28,8 @@ const state = {
   ditherMode: 'floyd-steinberg',
   density: 6,        // 1-8 (print heat)
   printing: false,
+  autoConnecting: false,
+  autoConnectAbort: null,
 };
 
 // =============================================================================
@@ -120,75 +122,63 @@ function scheduleProcess() {
 
 /**
  * Try to auto-reconnect to a previously paired printer.
- * Uses navigator.bluetooth.getDevices() + watchAdvertisements() to find
- * a known device that's in range, then connects without showing the picker.
+ * Uses navigator.bluetooth.getDevices() + watchAdvertisements() to listen
+ * continuously until the printer appears, then connects automatically.
+ * Stops when connected or when the user taps Connect manually.
  */
 async function tryAutoConnect() {
   if (!navigator.bluetooth?.getDevices) return;
 
+  let devices;
   try {
-    const devices = await navigator.bluetooth.getDevices();
-    if (devices.length === 0) return;
+    devices = await navigator.bluetooth.getDevices();
+  } catch (e) {
+    return;
+  }
+  if (devices.length === 0) return;
 
-    setStatus('Looking for printer...', 'info');
-    $('connect-btn').disabled = true;
+  // Filter to named devices
+  const named = devices.filter(d => d.name);
+  if (named.length === 0) return;
 
-    for (const device of devices) {
-      if (!device.name) continue;
+  setStatus('Waiting for printer...', 'info');
+  state.autoConnecting = true;
+
+  // Listen for advertisements on all known devices simultaneously.
+  // When any device is seen, try connecting to it.
+  const abort = new AbortController();
+
+  for (const device of named) {
+    if (!device.watchAdvertisements) continue;
+
+    device.addEventListener('advertisementreceived', async () => {
+      // Only act once
+      if (!state.autoConnecting || state.connected) return;
+      state.autoConnecting = false;
+      abort.abort();
 
       try {
-        // Check if device is in range via advertisements (3s timeout)
-        const inRange = await waitForAdvertisement(device, 3000);
-        if (!inRange) continue;
-
-        // Device is nearby — try connecting
         setStatus('Reconnecting to ' + device.name + '...', 'info');
         state.ble.device = device;
         state.ble.onDisconnect = handleDisconnect;
         await state.ble.connectGATT();
 
-        // Success
         state.connected = true;
         state.deviceName = device.name;
         onConnected();
-        return;
       } catch (e) {
         console.log('Auto-connect failed for', device.name + ':', e.message);
+        state.ble.device = null;
+        setStatus('', '');
+        updateConnectionUI();
       }
-    }
-  } catch (e) {
-    console.log('Auto-connect error:', e.message);
+    }, { once: true });
+
+    device.watchAdvertisements({ signal: abort.signal }).catch(() => {});
   }
 
-  // Clean up on failure
-  state.ble.device = null;
-  $('connect-btn').disabled = false;
-  setStatus('', '');
-}
-
-/** Wait for a BLE advertisement to confirm device is in range */
-function waitForAdvertisement(device, timeout) {
-  if (!device.watchAdvertisements) {
-    // watchAdvertisements not supported — skip rather than blind-connect
-    return Promise.resolve(false);
-  }
-
-  return new Promise((resolve) => {
-    const abort = new AbortController();
-    let done = false;
-
-    const finish = (result) => {
-      if (done) return;
-      done = true;
-      abort.abort();
-      resolve(result);
-    };
-
-    setTimeout(() => finish(false), timeout);
-
-    device.addEventListener('advertisementreceived', () => finish(true), { once: true });
-    device.watchAdvertisements({ signal: abort.signal }).catch(() => finish(false));
-  });
+  // Store abort so manual connect can cancel the background scan
+  state.autoConnectAbort = abort;
 }
 
 function handleDisconnect() {
@@ -214,6 +204,13 @@ function onConnected() {
 }
 
 async function connect() {
+  // Cancel background auto-connect scan if running
+  if (state.autoConnectAbort) {
+    state.autoConnecting = false;
+    state.autoConnectAbort.abort();
+    state.autoConnectAbort = null;
+  }
+
   try {
     setStatus('Connecting...', 'info');
     $('connect-btn').disabled = true;
