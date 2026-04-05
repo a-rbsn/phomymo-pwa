@@ -457,16 +457,23 @@ async function printImage() {
       rasterData = packBits(dithered, widthPx, heightPx, widthBytes, alignment);
     }
 
+    // Append blank rows so the print clears the tear edge
+    // (some printers ignore ESC J feed, but blank raster rows always work)
+    const feedRows = 200;
+    const paddedData = new Uint8Array(rasterData.length + rasterWidthBytes * feedRows);
+    paddedData.set(rasterData);
+    // Rest is already zeroes (white)
+
     showProgress(0, 'Sending to printer...');
 
     await print(state.ble,
-      { data: rasterData, widthBytes: rasterWidthBytes, heightLines: heightPx },
+      { data: paddedData, widthBytes: rasterWidthBytes, heightLines: heightPx + feedRows },
       {
         isBLE: true,
         deviceName: state.deviceName,
         printerModel: 'auto',
         density: state.density,
-        feed: 200,
+        feed: 0,
         onProgress: (pct) => showProgress(pct, `Printing... ${pct}%`),
       }
     );
