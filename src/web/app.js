@@ -277,7 +277,7 @@ function renderTextToImage(title, text) {
 
   const titleSize = Math.round(widthPx * 0.065);
   const bodySize = Math.round(widthPx * 0.055);
-  const lineHeight = 1.3;
+  const lineHeight = 1.2;
 
   // Wrap text into lines
   function wrapText(str, font, maxWidth) {
