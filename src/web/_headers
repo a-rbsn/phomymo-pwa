@@ -8,3 +8,7 @@
 # Allow caching for versioned JS files
 /*.js
   Cache-Control: public, max-age=31536000, immutable
+
+# Service worker must not be cached aggressively
+/sw.js
+  Cache-Control: no-cache

@@ -200,8 +200,13 @@ function handleFile(file) {
 
 /** Check if the app was opened via the share target */
 async function checkShareTarget() {
+  const fullUrl = window.location.href;
   const params = new URLSearchParams(window.location.search);
   const shareType = params.get('share');
+
+  // DEBUG: always show what URL we landed on
+  alert('Share target opened.\nURL: ' + fullUrl + '\nType: ' + (shareType || 'none'));
+
   if (!shareType) return;
 
   // Clean URL immediately
@@ -214,12 +219,9 @@ async function checkShareTarget() {
     if (debugResp) {
       const debugData = await debugResp.json();
       await debugCache.delete('share-debug');
-      console.log('Share debug:', debugData);
-      setStatus('SW received: ' + JSON.stringify(debugData), 'info');
-      // Show it for 5 seconds so user can read it
-      await new Promise(r => setTimeout(r, 5000));
+      alert('SW debug: ' + JSON.stringify(debugData, null, 2));
     }
-  } catch (_) { /* ignore debug errors */ }
+  } catch (debugErr) { alert('Debug read error: ' + debugErr.message); }
 
   try {
     const cache = await caches.open('shared-image');
