@@ -128,7 +128,7 @@ function scheduleProcess() {
  */
 async function tryAutoConnect() {
   if (!navigator.bluetooth?.getDevices) {
-    console.log('Auto-connect: getDevices() not supported');
+    setStatus('getDevices() not supported', 'warning');
     return;
   }
 
@@ -136,11 +136,12 @@ async function tryAutoConnect() {
   try {
     devices = await navigator.bluetooth.getDevices();
   } catch (e) {
-    console.log('Auto-connect: getDevices() error:', e.message);
+    setStatus('getDevices() error: ' + e.message, 'warning');
     return;
   }
 
-  console.log('Auto-connect: getDevices() returned', devices.length, 'device(s):', devices.map(d => d.name || '(unnamed)'));
+  const names = devices.map(d => d.name || '(unnamed)').join(', ');
+  setStatus('Saved devices: ' + (devices.length ? names : 'none'), 'info');
 
   if (devices.length === 0) return;
 
