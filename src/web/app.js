@@ -148,6 +148,8 @@ async function connect() {
     updateConnectionUI();
     if (e.message?.includes('cancel')) {
       setStatus('Connection cancelled', 'info');
+    } else if (e.message?.includes('globally disabled')) {
+      setStatus('Bluetooth blocked — open Chrome Settings > Site Settings > Bluetooth and enable it', 'error');
     } else {
       setStatus('Connection failed: ' + e.message, 'error');
     }
