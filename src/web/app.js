@@ -201,36 +201,147 @@ function handleFile(file) {
 /** Check if the app was opened via the share target */
 async function checkShareTarget() {
   const params = new URLSearchParams(window.location.search);
-  if (!params.has('share')) return;
+  const shareType = params.get('share');
+  if (!shareType) return;
 
   // Clean URL immediately
   window.history.replaceState({}, '', window.location.pathname);
 
   try {
     const cache = await caches.open('shared-image');
-    const response = await cache.match('latest');
-    if (response) {
-      const blob = await response.blob();
-      await cache.delete('latest');
-      if (blob.size > 0) {
-        const url = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = () => {
-          URL.revokeObjectURL(url);
+
+    if (shareType === 'text') {
+      // Shared text — render as a note image
+      const response = await cache.match('shared-text');
+      if (response) {
+        const { title, text } = await response.json();
+        await cache.delete('shared-text');
+        if (title || text) {
+          const img = renderTextToImage(title, text);
           state.sourceImage = img;
           processImage();
-          setStatus('Shared image loaded', 'success');
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          setStatus('Failed to load shared image', 'error');
-        };
-        img.src = url;
+          setStatus('Shared text loaded', 'success');
+        }
+      }
+    } else {
+      // Shared image file
+      const response = await cache.match('latest');
+      if (response) {
+        const blob = await response.blob();
+        await cache.delete('latest');
+        if (blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            state.sourceImage = img;
+            processImage();
+            setStatus('Shared image loaded', 'success');
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            setStatus('Failed to load shared image', 'error');
+          };
+          img.src = url;
+        }
       }
     }
   } catch (e) {
     console.error('Share target load error:', e);
   }
+}
+
+/**
+ * Render text as a note image at printer width.
+ * Returns an HTMLImageElement ready for the processing pipeline.
+ */
+function renderTextToImage(title, text) {
+  const widthBytes = state.connected
+    ? getPrinterWidthBytes(state.deviceName)
+    : DEFAULT_WIDTH_BYTES;
+  const widthPx = widthBytes * 8;
+  const padding = Math.round(widthPx * 0.06);
+  const contentWidth = widthPx - padding * 2;
+
+  // Set up a measuring canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = widthPx;
+  const ctx = canvas.getContext('2d');
+
+  const titleSize = Math.round(widthPx * 0.055);
+  const bodySize = Math.round(widthPx * 0.045);
+  const lineHeight = 1.45;
+
+  // Wrap text into lines
+  function wrapText(str, font, maxWidth) {
+    ctx.font = font;
+    const lines = [];
+    for (const paragraph of str.split('\n')) {
+      if (paragraph === '') { lines.push(''); continue; }
+      const words = paragraph.split(/\s+/);
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+    }
+    return lines;
+  }
+
+  const titleFont = `bold ${titleSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  const bodyFont = `${bodySize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+
+  const titleLines = title ? wrapText(title, titleFont, contentWidth) : [];
+  const bodyLines = text ? wrapText(text, bodyFont, contentWidth) : [];
+
+  // Calculate total height
+  let y = padding;
+  if (titleLines.length) y += titleLines.length * (titleSize * lineHeight) + titleSize * 0.4;
+  if (bodyLines.length) y += bodyLines.length * (bodySize * lineHeight);
+  y += padding;
+
+  // Render
+  canvas.height = Math.round(y);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+
+  let curY = padding;
+
+  if (titleLines.length) {
+    ctx.font = titleFont;
+    ctx.textBaseline = 'top';
+    for (const line of titleLines) {
+      ctx.fillText(line, padding, curY);
+      curY += titleSize * lineHeight;
+    }
+    // Separator line
+    curY += titleSize * 0.15;
+    ctx.fillRect(padding, Math.round(curY), contentWidth, 1);
+    curY += titleSize * 0.25;
+  }
+
+  if (bodyLines.length) {
+    ctx.font = bodyFont;
+    ctx.textBaseline = 'top';
+    for (const line of bodyLines) {
+      ctx.fillText(line, padding, curY);
+      curY += bodySize * lineHeight;
+    }
+  }
+
+  // Convert canvas to image element (synchronous since canvas is already rendered)
+  const img = new Image();
+  img.src = canvas.toDataURL();
+  img.width = canvas.width;
+  img.height = canvas.height;
+  return img;
 }
 
 // =============================================================================

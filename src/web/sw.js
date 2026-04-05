@@ -3,7 +3,7 @@
  * Handles: share target image receiving, offline caching
  */
 
-const CACHE_NAME = 'phomemo-print-v1';
+const CACHE_NAME = 'phomemo-print-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -64,26 +64,38 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
- * Handle share target: extract shared image, cache it, redirect to app
+ * Handle share target: extract shared image or text, cache it, redirect to app
  */
 async function handleShareTarget(request) {
+  const appUrl = new URL('./', self.location).href;
+
   try {
     const formData = await request.formData();
+
+    // Check for shared image file first
     const files = formData.getAll('image');
     const file = files[0];
-
     if (file && file.size > 0) {
-      // Store shared image in a temporary cache
       const cache = await caches.open('shared-image');
       await cache.put('latest', new Response(file, {
         headers: { 'Content-Type': file.type || 'image/png' },
       }));
+      return Response.redirect(appUrl + '?share=image', 303);
+    }
+
+    // Otherwise check for shared text
+    const title = formData.get('title') || '';
+    const text = formData.get('text') || '';
+    if (title || text) {
+      const cache = await caches.open('shared-image');
+      await cache.put('shared-text', new Response(JSON.stringify({ title, text }), {
+        headers: { 'Content-Type': 'application/json' },
+      }));
+      return Response.redirect(appUrl + '?share=text', 303);
     }
   } catch (e) {
     console.error('Share target error:', e);
   }
 
-  // Redirect to main app with share flag
-  const appUrl = new URL('./', self.location).href;
-  return Response.redirect(appUrl + '?share=1', 303);
+  return Response.redirect(appUrl, 303);
 }
