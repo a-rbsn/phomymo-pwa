@@ -219,12 +219,18 @@ async function checkShareTarget() {
         if (title || text) {
           const img = await renderTextToImage(title, text);
           state.sourceImage = img;
-          // Optimize settings for text: crisp threshold, max darkness
+          // Optimize settings for text: crisp threshold, max darkness, bold contrast
           state.ditherMode = 'threshold';
           $('dither-mode').value = 'threshold';
           state.density = 8;
           $('density').value = 8;
           $('density-value').textContent = '8';
+          state.brightness = -20;
+          $('brightness').value = -20;
+          $('brightness-value').textContent = '-20';
+          state.contrast = 50;
+          $('contrast').value = 50;
+          $('contrast-value').textContent = '50';
           processImage();
           setStatus('Shared text loaded', 'success');
         }
