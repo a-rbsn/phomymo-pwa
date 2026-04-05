@@ -219,9 +219,12 @@ async function checkShareTarget() {
         if (title || text) {
           const img = await renderTextToImage(title, text);
           state.sourceImage = img;
-          // Use threshold for text — dithering makes crisp text fuzzy
+          // Optimize settings for text: crisp threshold, max darkness
           state.ditherMode = 'threshold';
           $('dither-mode').value = 'threshold';
+          state.density = 8;
+          $('density').value = 8;
+          $('density-value').textContent = '8';
           processImage();
           setStatus('Shared text loaded', 'success');
         }
@@ -272,9 +275,9 @@ function renderTextToImage(title, text) {
   canvas.width = widthPx;
   const ctx = canvas.getContext('2d');
 
-  const titleSize = Math.round(widthPx * 0.08);
-  const bodySize = Math.round(widthPx * 0.065);
-  const lineHeight = 1.5;
+  const titleSize = Math.round(widthPx * 0.065);
+  const bodySize = Math.round(widthPx * 0.055);
+  const lineHeight = 1.3;
 
   // Wrap text into lines
   function wrapText(str, font, maxWidth) {
@@ -463,7 +466,7 @@ async function printImage() {
         deviceName: state.deviceName,
         printerModel: 'auto',
         density: state.density,
-        feed: 100,
+        feed: 200,
         onProgress: (pct) => showProgress(pct, `Printing... ${pct}%`),
       }
     );
