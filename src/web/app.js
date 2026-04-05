@@ -207,6 +207,20 @@ async function checkShareTarget() {
   // Clean URL immediately
   window.history.replaceState({}, '', window.location.pathname);
 
+  // Show debug info from SW if available
+  try {
+    const debugCache = await caches.open('shared-image');
+    const debugResp = await debugCache.match('share-debug');
+    if (debugResp) {
+      const debugData = await debugResp.json();
+      await debugCache.delete('share-debug');
+      console.log('Share debug:', debugData);
+      setStatus('SW received: ' + JSON.stringify(debugData), 'info');
+      // Show it for 5 seconds so user can read it
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  } catch (_) { /* ignore debug errors */ }
+
   try {
     const cache = await caches.open('shared-image');
 
@@ -223,7 +237,7 @@ async function checkShareTarget() {
           setStatus('Shared text loaded', 'success');
         }
       }
-    } else {
+    } else if (shareType === 'image') {
       // Shared image file
       const response = await cache.match('latest');
       if (response) {
@@ -246,6 +260,7 @@ async function checkShareTarget() {
         }
       }
     }
+    // shareType === 'debug' — just shows the debug info above
   } catch (e) {
     console.error('Share target load error:', e);
   }

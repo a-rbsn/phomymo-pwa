@@ -3,7 +3,7 @@
  * Handles: share target image receiving, offline caching
  */
 
-const CACHE_NAME = 'phomemo-print-v3';
+const CACHE_NAME = 'phomemo-print-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -68,9 +68,19 @@ self.addEventListener('fetch', (event) => {
  */
 async function handleShareTarget(request) {
   const appUrl = new URL('./', self.location).href;
+  const debug = { fields: {}, files: {}, result: 'none', error: null };
 
   try {
     const formData = await request.formData();
+
+    // Log everything in the form data for debugging
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        debug.files[key] = { name: value.name, type: value.type, size: value.size };
+      } else {
+        debug.fields[key] = value;
+      }
+    }
 
     // Check for shared image file first
     const files = formData.getAll('image');
@@ -80,12 +90,12 @@ async function handleShareTarget(request) {
       await cache.put('latest', new Response(file, {
         headers: { 'Content-Type': file.type || 'image/png' },
       }));
+      debug.result = 'image';
+      await saveDebug(debug);
       return Response.redirect(appUrl + '?share=image', 303);
     }
 
-    // Check for text shared as a file (e.g. from Google Keep, Samsung Notes)
-    // Android text shares arrive via the "textfile" files entry when
-    // text/plain is in the files accept list
+    // Check for text shared as a file
     const textFiles = formData.getAll('textfile');
     const textFile = textFiles[0];
     if (textFile && textFile.size > 0) {
@@ -95,6 +105,8 @@ async function handleShareTarget(request) {
         await cache.put('shared-text', new Response(JSON.stringify({ title: '', text: fileText }), {
           headers: { 'Content-Type': 'application/json' },
         }));
+        debug.result = 'textfile';
+        await saveDebug(debug);
         return Response.redirect(appUrl + '?share=text', 303);
       }
     }
@@ -107,11 +119,22 @@ async function handleShareTarget(request) {
       await cache.put('shared-text', new Response(JSON.stringify({ title, text }), {
         headers: { 'Content-Type': 'application/json' },
       }));
+      debug.result = 'formfield';
+      await saveDebug(debug);
       return Response.redirect(appUrl + '?share=text', 303);
     }
   } catch (e) {
+    debug.error = e.message;
     console.error('Share target error:', e);
   }
 
-  return Response.redirect(appUrl, 303);
+  await saveDebug(debug);
+  return Response.redirect(appUrl + '?share=debug', 303);
+}
+
+async function saveDebug(data) {
+  const cache = await caches.open('shared-image');
+  await cache.put('share-debug', new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json' },
+  }));
 }
