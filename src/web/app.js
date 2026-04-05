@@ -200,28 +200,12 @@ function handleFile(file) {
 
 /** Check if the app was opened via the share target */
 async function checkShareTarget() {
-  const fullUrl = window.location.href;
   const params = new URLSearchParams(window.location.search);
   const shareType = params.get('share');
-
-  // DEBUG: always show what URL we landed on
-  alert('Share target opened.\nURL: ' + fullUrl + '\nType: ' + (shareType || 'none'));
-
   if (!shareType) return;
 
   // Clean URL immediately
   window.history.replaceState({}, '', window.location.pathname);
-
-  // Show debug info from SW if available
-  try {
-    const debugCache = await caches.open('shared-image');
-    const debugResp = await debugCache.match('share-debug');
-    if (debugResp) {
-      const debugData = await debugResp.json();
-      await debugCache.delete('share-debug');
-      alert('SW debug: ' + JSON.stringify(debugData, null, 2));
-    }
-  } catch (debugErr) { alert('Debug read error: ' + debugErr.message); }
 
   try {
     const cache = await caches.open('shared-image');
@@ -235,6 +219,9 @@ async function checkShareTarget() {
         if (title || text) {
           const img = await renderTextToImage(title, text);
           state.sourceImage = img;
+          // Use threshold for text — dithering makes crisp text fuzzy
+          state.ditherMode = 'threshold';
+          $('dither-mode').value = 'threshold';
           processImage();
           setStatus('Shared text loaded', 'success');
         }
@@ -285,9 +272,9 @@ function renderTextToImage(title, text) {
   canvas.width = widthPx;
   const ctx = canvas.getContext('2d');
 
-  const titleSize = Math.round(widthPx * 0.055);
-  const bodySize = Math.round(widthPx * 0.045);
-  const lineHeight = 1.45;
+  const titleSize = Math.round(widthPx * 0.08);
+  const bodySize = Math.round(widthPx * 0.065);
+  const lineHeight = 1.5;
 
   // Wrap text into lines
   function wrapText(str, font, maxWidth) {
@@ -340,7 +327,7 @@ function renderTextToImage(title, text) {
     }
     // Separator line
     curY += titleSize * 0.15;
-    ctx.fillRect(padding, Math.round(curY), contentWidth, 1);
+    ctx.fillRect(padding, Math.round(curY), contentWidth, 2);
     curY += titleSize * 0.25;
   }
 
@@ -476,7 +463,7 @@ async function printImage() {
         deviceName: state.deviceName,
         printerModel: 'auto',
         density: state.density,
-        feed: 32,
+        feed: 100,
         onProgress: (pct) => showProgress(pct, `Printing... ${pct}%`),
       }
     );
