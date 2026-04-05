@@ -3,7 +3,7 @@
  * Handles: share target image receiving, offline caching
  */
 
-const CACHE_NAME = 'phomemo-print-v2';
+const CACHE_NAME = 'phomemo-print-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -83,7 +83,23 @@ async function handleShareTarget(request) {
       return Response.redirect(appUrl + '?share=image', 303);
     }
 
-    // Otherwise check for shared text
+    // Check for text shared as a file (e.g. from Google Keep, Samsung Notes)
+    // Android text shares arrive via the "textfile" files entry when
+    // text/plain is in the files accept list
+    const textFiles = formData.getAll('textfile');
+    const textFile = textFiles[0];
+    if (textFile && textFile.size > 0) {
+      const fileText = await textFile.text();
+      if (fileText) {
+        const cache = await caches.open('shared-image');
+        await cache.put('shared-text', new Response(JSON.stringify({ title: '', text: fileText }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+        return Response.redirect(appUrl + '?share=text', 303);
+      }
+    }
+
+    // Check for shared text via form fields
     const title = formData.get('title') || '';
     const text = formData.get('text') || '';
     if (title || text) {

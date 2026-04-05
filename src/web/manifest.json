@@ -33,6 +33,10 @@
         {
           "name": "image",
           "accept": ["image/png", "image/jpeg", "image/webp", ".png", ".jpg", ".jpeg", ".webp"]
+        },
+        {
+          "name": "textfile",
+          "accept": ["text/plain", "text/*"]
         }
       ]
     }
