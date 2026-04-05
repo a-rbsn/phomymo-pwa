@@ -315,7 +315,7 @@ function renderTextToImage(title, text) {
 
   // Calculate total height
   let y = padding;
-  if (titleLines.length) y += titleLines.length * (titleSize * lineHeight) + titleSize * 0.4;
+  if (titleLines.length) y += titleLines.length * (titleSize * lineHeight) + titleSize * 0.3;
   if (bodyLines.length) y += bodyLines.length * (bodySize * lineHeight);
   y += padding;
 
@@ -334,10 +334,7 @@ function renderTextToImage(title, text) {
       ctx.fillText(line, padding, curY);
       curY += titleSize * lineHeight;
     }
-    // Separator line
-    curY += titleSize * 0.15;
-    ctx.fillRect(padding, Math.round(curY), contentWidth, 2);
-    curY += titleSize * 0.25;
+    curY += titleSize * 0.3;
   }
 
   if (bodyLines.length) {
